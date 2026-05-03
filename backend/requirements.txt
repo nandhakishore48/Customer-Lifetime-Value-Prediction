@@ -1,0 +1,10 @@
+flask
+flask-cors
+flask-sqlalchemy
+pyjwt
+passlib
+pandas
+scikit-learn
+numpy
+gunicorn
+python-dotenv

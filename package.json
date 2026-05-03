@@ -1,0 +1,15 @@
+{
+  "name": "customer-ltv-ai",
+  "version": "1.0.0",
+  "description": "Customer LTV Prediction AI",
+  "main": "index.js",
+  "scripts": {
+    "install:all": "npm install && cd frontend && npm install && pip install flask flask-cors pandas scikit-learn numpy",
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "python backend/app.py",
+    "dev": "concurrently \"npm run dev:backend\" \"npm run dev:frontend\""
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
