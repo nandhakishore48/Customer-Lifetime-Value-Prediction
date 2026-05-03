@@ -8,3 +8,12 @@ scikit-learn
 numpy
 gunicorn
 python-dotenv
+xgboost
+lightgbm
+shap
+optuna
+joblib
+psycopg2-binary
+sqlalchemy
+matplotlib
+seaborn

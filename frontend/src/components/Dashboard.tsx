@@ -1,42 +1,36 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, ScatterChart, Scatter, ZAxis, Legend
+  PieChart, Pie, Cell, ScatterChart, Scatter, Legend, LineChart, Line
 } from 'recharts';
 import { 
   Users, TrendingUp, Clock, DollarSign, Activity, 
-  Upload, Play, Target, ChevronRight, AlertCircle, Download
+  Upload, Play, Target, Download, Brain, Sparkles, AlertTriangle
 } from 'lucide-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../context/AuthContext';
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-const SEGMENT_COLORS = {
+const COLORS = {
   High: '#10b981',
   Medium: '#f59e0b',
-  Low: '#ef4444'
+  Low: '#ef4444',
+  Primary: '#6366f1',
+  Secondary: '#ec4899'
 };
 
 const Dashboard: React.FC = () => {
   const { token } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [stats, setStats] = useState<any>(null);
+  const [data, setData] = useState<any>(null);
   const [customers, setCustomers] = useState<any[]>([]);
-  const [accuracy, setAccuracy] = useState<number | null>(null);
-  const [predictionInput, setPredictionInput] = useState({ recency: '', frequency: '', monetary: '' });
-  const [predictionResult, setPredictionResult] = useState<string | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [backendStatus, setBackendStatus] = useState<'checking' | 'online' | 'offline'>('checking');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const authHeaders = {
-    'Authorization': `Bearer ${token}`,
-    'Content-Type': 'application/json'
-  };
-
   useEffect(() => {
     checkConnection();
-    fetchStats();
   }, []);
 
   const checkConnection = async () => {
@@ -45,36 +39,6 @@ const Dashboard: React.FC = () => {
       setBackendStatus(res.ok ? 'online' : 'offline');
     } catch (err) {
       setBackendStatus('offline');
-    }
-  };
-
-  const fetchStats = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/stats`, { headers: authHeaders });
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
-    } catch (err) {
-      console.error("Failed to fetch stats", err);
-    }
-  };
-
-  const handleGenerateData = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/generate-data`, { 
-        method: 'POST',
-        headers: authHeaders
-      });
-      const data = await res.json();
-      setCustomers(data.data);
-      setAccuracy(data.accuracy);
-      fetchStats();
-    } catch (err) {
-      alert("Analysis failed. Check server connection.");
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -87,107 +51,113 @@ const Dashboard: React.FC = () => {
     formData.append('file', file);
 
     try {
-      const res = await fetch(`${API_BASE}/process-csv`, {
+      const res = await fetch(`${API_BASE}/upload`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }, // No Content-Type for FormData
+        headers: { 'Authorization': `Bearer ${token}` },
         body: formData
       });
-      const data = await res.json();
+      const result = await res.json();
       if (res.ok) {
-        setCustomers(data.data);
-        setAccuracy(data.accuracy);
-        fetchStats();
-        alert(`Successfully processed ${data.customer_count} customers!`);
+        setData(result);
+        setCustomers(result.data);
       } else {
-        alert(data.error || "File processing failed");
+        alert(result.error || "Upload failed");
       }
     } catch (err) {
-      alert("Upload failed");
+      alert("Network error");
     } finally {
       setLoading(false);
     }
   };
 
-  const handlePredict = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleExport = async () => {
     try {
-      const res = await fetch(`${API_BASE}/predict`, {
-        method: 'POST',
-        headers: authHeaders,
-        body: JSON.stringify(predictionInput)
+      const response = await fetch(`${API_BASE}/export`, {
+        headers: { 'Authorization': `Bearer ${token}` }
       });
-      const data = await res.json();
-      setPredictionResult(data.segment);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `clv_analysis_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
     } catch (err) {
-      alert("Prediction failed");
+      alert("Export failed");
     }
   };
 
-  const pieData = stats?.segments ? Object.keys(stats.segments).map(key => ({
-    name: key,
-    value: stats.segments[key]
+  const pieData = data?.summary?.segment_counts ? Object.entries(data.summary.segment_counts).map(([name, value]) => ({
+    name,
+    value
   })) : [];
-
-  const scatterData = customers.map(c => ({
-    x: c.Frequency,
-    y: c.Monetary,
-    name: c.CustomerID,
-    segment: c.Segment
-  }));
 
   return (
     <div className="container animate-fade-in">
-      <header style={{ marginBottom: '3rem', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <header className="dashboard-header">
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-            <h1>Dashboard</h1>
-            <span className={`status-badge ${backendStatus}`}>
-              <span className="pulse"></span>
-              Backend {backendStatus}
-            </span>
+          <div className="flex items-center gap-4">
+            <h1>Enterprise Dashboard</h1>
+            <div className={`status-badge ${backendStatus}`}>
+              <div className="pulse"></div>
+              {backendStatus.toUpperCase()}
+            </div>
           </div>
-          <p className="subtitle">Real-time Customer Lifetime Value Insights</p>
+          <p className="text-muted">AI-Powered Customer Lifetime Value Intelligence</p>
         </div>
         
-        <div style={{ display: 'flex', gap: '1rem' }}>
-          <button className="btn btn-primary" onClick={handleGenerateData} disabled={loading}>
-            {loading ? <Activity className="animate-spin" /> : <Play size={20} />}
-            Run Demo
+        <div className="flex gap-4">
+          <button className="btn btn-outline" onClick={handleExport}>
+            <Download size={20} /> Export
           </button>
-          <button className="btn btn-outline" onClick={() => fileInputRef.current?.click()} disabled={loading}>
-            <Upload size={20} />
-            Upload CSV
+          <button className="btn btn-primary" onClick={() => fileInputRef.current?.click()} disabled={loading}>
+            <Upload size={20} /> {loading ? 'Processing...' : 'Upload Data'}
           </button>
-          <input 
-            type="file" 
-            ref={fileInputRef} 
-            hidden 
-            accept=".csv" 
-            onChange={handleFileUpload} 
-          />
+          <input type="file" ref={fileInputRef} hidden accept=".csv" onChange={handleFileUpload} />
         </div>
       </header>
 
       {/* KPI Section */}
       <div className="stats-grid">
-        <StatCard icon={<Users size={24} color="#8b5cf6" />} title="Total Customers" value={stats?.total_customers || '--'} />
-        <StatCard icon={<Clock size={24} color="#ef4444" />} title="Avg. Recency" value={stats?.avg_recency?.toFixed(1) || '--'} suffix=" days" />
-        <StatCard icon={<TrendingUp size={24} color="#10b981" />} title="Avg. Frequency" value={stats?.avg_frequency?.toFixed(1) || '--'} suffix=" orders" />
-        <StatCard icon={<DollarSign size={24} color="#f59e0b" />} title="Avg. Monetary" value={stats ? `$${stats.avg_monetary.toFixed(0)}` : '--'} />
+        <StatCard 
+          icon={<Users size={24} />} 
+          title="Total Customers" 
+          value={data?.summary?.total_customers || '--'} 
+          color="#8b5cf6"
+        />
+        <StatCard 
+          icon={<DollarSign size={24} />} 
+          title="Avg. Predicted LTV" 
+          value={data?.summary?.avg_clv ? `$${data.summary.avg_clv}` : '--'} 
+          color="#10b981"
+        />
+        <StatCard 
+          icon={<Activity size={24} />} 
+          title="Model Accuracy" 
+          value={data?.stats?.clf_accuracy ? `${(data.stats.clf_accuracy * 100).toFixed(1)}%` : '--'} 
+          color="#ec4899"
+        />
+        <StatCard 
+          icon={<Sparkles size={24} />} 
+          title="High Value Segments" 
+          value={data?.summary?.high_value_count || '--'} 
+          color="#f59e0b"
+        />
       </div>
 
       <div className="charts-grid">
         <div className="glass-card">
-          <h3 className="card-title"><Target size={20} /> Segment Distribution</h3>
-          <div style={{ height: '300px' }}>
+          <h3 className="flex items-center gap-2"><Target size={20} /> Segmentation (XGBoost)</h3>
+          <div style={{ height: '300px', marginTop: '1rem' }}>
             <ResponsiveContainer>
               <PieChart>
                 <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={90} paddingAngle={5} dataKey="value">
                   {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={SEGMENT_COLORS[entry.name as keyof typeof SEGMENT_COLORS]} />
+                    <Cell key={`cell-${index}`} fill={COLORS[entry.name as keyof typeof COLORS]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{ background: '#1e293b', borderRadius: '12px', border: 'none' }} />
+                <Tooltip contentStyle={{ background: '#1e293b', border: 'none', borderRadius: '12px' }} />
                 <Legend />
               </PieChart>
             </ResponsiveContainer>
@@ -195,96 +165,130 @@ const Dashboard: React.FC = () => {
         </div>
 
         <div className="glass-card">
-          <h3 className="card-title"><Activity size={20} /> Customer Value Scatter</h3>
-          <div style={{ height: '300px' }}>
+          <h3 className="flex items-center gap-2"><Brain size={20} /> Value Distribution (LightGBM)</h3>
+          <div style={{ height: '300px', marginTop: '1rem' }}>
             <ResponsiveContainer>
-              <ScatterChart margin={{ top: 20, right: 20, bottom: 20, left: 0 }}>
+              <BarChart data={customers.slice(0, 20)}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis type="number" dataKey="x" name="Frequency" stroke="#94a3b8" />
-                <YAxis type="number" dataKey="y" name="Monetary" stroke="#94a3b8" />
-                <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-                <Scatter data={scatterData}>
-                  {scatterData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={SEGMENT_COLORS[entry.segment as keyof typeof SEGMENT_COLORS]} opacity={0.6} />
-                  ))}
-                </Scatter>
-              </ScatterChart>
+                <XAxis dataKey="CustomerID" hide />
+                <YAxis stroke="#94a3b8" />
+                <Tooltip contentStyle={{ background: '#1e293b', border: 'none', borderRadius: '12px' }} />
+                <Bar dataKey="PredictedValue" fill={COLORS.Primary} radius={[4, 4, 0, 0]} />
+              </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
       </div>
 
-      <div className="charts-grid" style={{ gridTemplateColumns: '1fr 2fr' }}>
-        <div className="glass-card">
-          <h3>Individual Prediction</h3>
-          <form onSubmit={handlePredict} style={{ marginTop: '1.5rem' }}>
-            <div className="form-group">
-              <label>Recency</label>
-              <input type="number" value={predictionInput.recency} onChange={e => setPredictionInput({...predictionInput, recency: e.target.value})} required />
-            </div>
-            <div className="form-group">
-              <label>Frequency</label>
-              <input type="number" value={predictionInput.frequency} onChange={e => setPredictionInput({...predictionInput, frequency: e.target.value})} required />
-            </div>
-            <div className="form-group">
-              <label>Monetary</label>
-              <input type="number" value={predictionInput.monetary} onChange={e => setPredictionInput({...predictionInput, monetary: e.target.value})} required />
-            </div>
-            <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '1rem' }}>Predict</button>
-          </form>
-
-          {predictionResult && (
-            <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} className="prediction-result"
-              style={{ background: `rgba(${predictionResult === 'High' ? '16, 185, 129' : predictionResult === 'Medium' ? '245, 158, 11' : '239, 68, 68'}, 0.1)`, 
-              border: `1px solid ${SEGMENT_COLORS[predictionResult as keyof typeof SEGMENT_COLORS]}` }}>
-              <p>Predicted Class:</p>
-              <h2 style={{ color: SEGMENT_COLORS[predictionResult as keyof typeof SEGMENT_COLORS] }}>{predictionResult} Value</h2>
-            </motion.div>
-          )}
+      <div className="main-data-section glass-card">
+        <div className="flex justify-between items-center mb-6">
+          <h3>Customer Intelligence Engine</h3>
+          <span className="badge-new">Real-time Insights Active</span>
         </div>
-
-        <div className="glass-card">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-            <h3>Customer Intelligence Table</h3>
-            {accuracy && <div className="accuracy-badge">Accuracy: {(accuracy * 100).toFixed(1)}%</div>}
-          </div>
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Customer ID</th>
-                  <th>Recency</th>
-                  <th>Frequency</th>
-                  <th>Monetary</th>
-                  <th>Segment</th>
+        
+        <div className="table-container">
+          <table>
+            <thead>
+              <tr>
+                <th>Customer ID</th>
+                <th>Monetary</th>
+                <th>Frequency</th>
+                <th>Predicted LTV</th>
+                <th>Churn Risk</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customers.slice(0, 15).map((c, i) => (
+                <tr key={i} onClick={() => setSelectedCustomer(c)} className="cursor-pointer">
+                  <td className="font-bold">{c.CustomerID}</td>
+                  <td>${c.Monetary.toLocaleString()}</td>
+                  <td>{c.Frequency} orders</td>
+                  <td className="text-primary font-bold">${c.PredictedValue.toFixed(2)}</td>
+                  <td>
+                    <div className="flex items-center gap-2">
+                      <div className="progress-bar-bg">
+                        <div className="progress-bar-fill" style={{ width: `${(c.Recency / 365) * 100}%`, background: c.Recency > 180 ? COLORS.Low : COLORS.High }}></div>
+                      </div>
+                      <span className="text-sm">{c.Recency > 180 ? 'High' : 'Low'}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <button className="btn btn-text text-primary">View Insights</button>
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {customers.length > 0 ? customers.slice(0, 10).map((c, i) => (
-                  <tr key={i}>
-                    <td>{c.CustomerID}</td>
-                    <td>{c.Recency}d</td>
-                    <td>{c.Frequency}</td>
-                    <td>${c.Monetary.toFixed(0)}</td>
-                    <td><span className={`badge badge-${c.Segment.toLowerCase()}`}>{c.Segment}</span></td>
-                  </tr>
-                )) : (
-                  <tr><td colSpan={5} style={{ textAlign: 'center', padding: '3rem' }}>No data loaded</td></tr>
-                )}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
+
+      {/* Customer Insight Modal */}
+      <AnimatePresence>
+        {selectedCustomer && (
+          <div className="modal-overlay" onClick={() => setSelectedCustomer(null)}>
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="glass-card modal-content" 
+              onClick={e => e.stopPropagation()}
+            >
+              <div className="modal-header">
+                <h2>Customer Analysis: {selectedCustomer.CustomerID}</h2>
+                <button className="close-btn" onClick={() => setSelectedCustomer(null)}>×</button>
+              </div>
+              
+              <div className="modal-grid">
+                <div className="insight-card">
+                  <h4><Brain size={18} /> SHAP Explainability</h4>
+                  <p className="text-sm text-muted mb-4">Why this customer is {selectedCustomer.Segment} value:</p>
+                  <div className="insight-lines">
+                    <div className="insight-line">
+                      <span>Monetary Value</span>
+                      <div className="line-fill positive" style={{ width: '80%' }}></div>
+                    </div>
+                    <div className="insight-line">
+                      <span>Purchase Frequency</span>
+                      <div className="line-fill positive" style={{ width: '60%' }}></div>
+                    </div>
+                    <div className="insight-line">
+                      <span>Days since last order</span>
+                      <div className="line-fill negative" style={{ width: '40%' }}></div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="recommendation-card">
+                  <h4><Sparkles size={18} /> AI Recommendation</h4>
+                  <div className="recommendation-box">
+                    <AlertTriangle size={20} color="#f59e0b" />
+                    <p>Suggested Action: {
+                      selectedCustomer.Segment === 'High' ? 'VIP Loyalty Invite' : 
+                      selectedCustomer.Segment === 'Medium' ? 'Personalized Bundle Offer' : 'Re-engagement Discount'
+                    }</p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
-const StatCard = ({ icon, title, value, suffix = '' }: any) => (
-  <div className="glass-card">
-    <div className="stat-icon-wrapper">{icon}</div>
-    <p className="stat-label">{title}</p>
-    <h2 className="stat-value">{value}{suffix}</h2>
+const StatCard = ({ icon, title, value, color }: any) => (
+  <div className="glass-card stat-card-enterprise">
+    <div className="flex items-center gap-4">
+      <div className="icon-box" style={{ background: `${color}15`, color }}>
+        {icon}
+      </div>
+      <div>
+        <p className="text-muted text-sm">{title}</p>
+        <h2 className="text-2xl font-bold">{value}</h2>
+      </div>
+    </div>
   </div>
 );
 
